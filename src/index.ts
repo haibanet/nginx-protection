@@ -11,8 +11,7 @@ export default {
                           url.searchParams.has('wechat');
     
     // 检测工具攻击
-    const isToolAttack = userAgent.includes('curl') ||
-                        userAgent.includes('wget') ||
+    const isToolAttack = userAgent.includes('wget') ||
                         userAgent.includes('python') ||
                         userAgent.includes('bot') ||
                         userAgent.includes('spider') ||
