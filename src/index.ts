@@ -1,50 +1,53 @@
-import { ApiException, fromHono } from "chanfana";
-import { Hono } from "hono";
-import { tasksRouter } from "./endpoints/tasks/router";
-import { ContentfulStatusCode } from "hono/utils/http-status";
-import { DummyEndpoint } from "./endpoints/dummyEndpoint";
-
-// Start a Hono app
-const app = new Hono<{ Bindings: Env }>();
-
-app.onError((err, c) => {
-  if (err instanceof ApiException) {
-    // If it's a Chanfana ApiException, let Chanfana handle the response
-    return c.json(
-      { success: false, errors: err.buildResponse() },
-      err.status as ContentfulStatusCode,
-    );
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const url = new URL(request.url);
+    const userAgent = request.headers.get('User-Agent') || '';
+    
+    // 检测微信审核系统
+    const isWeChatAudit = userAgent.includes('MicroMessenger') || 
+                          userAgent.includes('WeChat') ||
+                          userAgent.includes('weixin110') ||
+                          url.pathname.includes('wechat') ||
+                          url.searchParams.has('wechat');
+    
+    // 检测工具攻击
+    const isToolAttack = userAgent.includes('curl') ||
+                        userAgent.includes('wget') ||
+                        userAgent.includes('python') ||
+                        userAgent.includes('bot') ||
+                        userAgent.includes('spider') ||
+                        userAgent.includes('crawler');
+    
+    if (isWeChatAudit) {
+      // 随机返回虚假页面
+      const fakePages = [
+        '<!DOCTYPE html><html><head><title>页面建设中</title></head><body><h1>网站正在维护中，请稍后再试</h1></body></html>',
+        '<!DOCTYPE html><html><head><title>404 Not Found</title></head><body><h1>页面不存在</h1></body></html>',
+        '<!DOCTYPE html><html><head><title>服务器错误</title></head><body><h1>服务器暂时不可用</h1></body></html>'
+      ];
+      
+      const randomPage = fakePages[Math.floor(Math.random() * fakePages.length)];
+      
+      return new Response(randomPage, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+    }
+    
+    if (isToolAttack) {
+      return new Response('Access Denied', {
+        status: 403,
+        headers: {
+          'Content-Type': 'text/plain',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+    }
+    
+    // 正常访问，转发到源站
+    return fetch(request);
   }
-
-  console.error("Global error handler caught:", err); // Log the error if it's not known
-
-  // For other errors, return a generic 500 response
-  return c.json(
-    {
-      success: false,
-      errors: [{ code: 7000, message: "Internal Server Error" }],
-    },
-    500,
-  );
-});
-
-// Setup OpenAPI registry
-const openapi = fromHono(app, {
-  docs_url: "/",
-  schema: {
-    info: {
-      title: "My Awesome API",
-      version: "2.0.0",
-      description: "This is the documentation for my awesome API.",
-    },
-  },
-});
-
-// Register Tasks Sub router
-openapi.route("/tasks", tasksRouter);
-
-// Register other endpoints
-openapi.post("/dummy/:slug", DummyEndpoint);
-
-// Export the Hono app
-export default app;
+};
